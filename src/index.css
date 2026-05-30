@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -109,3 +110,16 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+=======
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: #0C0C10;
+  color: #F0EDF8;
+  -webkit-font-smoothing: antialiased;
+}
+#root { min-height: 100vh; }
+>>>>>>> 87148332c8ecf32074ff1db53a824caaa161a2fb
