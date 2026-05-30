@@ -78,57 +78,17 @@ function useBreakpoint() {
 // ─── TMDB API HELPERS ─────────────────────────────────────────────────────────
 const get = (url) => fetch(url).then(r => r.json());
 
-// Base discover URL builder
-const discoverMovie = (params) => `${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
-const discoverTV    = (params) => `${TMDB}/discover/tv?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
-
-// Tamil originals — newest first, no date restriction (TMDb returns currently streaming)
+// Discover: Tamil originals currently on OTT in India (all years, sorted by popularity)
 async function fetchMovies(page = 1) {
-  return get(discoverMovie(`with_original_language=ta&sort_by=primary_release_date.desc&page=${page}`));
+  return get(`${TMDB}/discover/movie?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
 }
+
 async function fetchSeries(page = 1) {
-  return get(discoverTV(`with_original_language=ta&sort_by=first_air_date.desc&page=${page}`));
+  return get(`${TMDB}/discover/tv?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
 }
 
-// Dubbed Tamil — newest first
 async function fetchDubbed(page = 1) {
-  return get(discoverMovie(`with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=primary_release_date.desc&page=${page}&language=ta-IN`));
-}
-
-// Platform-specific — no date restriction, sort by date
-async function fetchByProvider(providerId, page = 1) {
-  const [mv, tv] = await Promise.all([
-    get(discoverMovie(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=primary_release_date.desc&page=${page}`)),
-    get(discoverTV(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=first_air_date.desc&page=${page}`)),
-  ]);
-  return {
-    movies: (mv.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Original Tamil", platforms:[] })),
-    series: (tv.results||[]).map(t => ({ ...t, mediaType:"tv",    langType:"Original Tamil", platforms:[] })),
-  };
-}
-
-// Fetch content specifically for underrepresented platforms
-async function fetchPlatformSpecific() {
-  const platforms = [
-    { id: 309,  name: "Sun NXT"  },  // Sun NXT
-    { id: 232,  name: "ZEE5"     },  // ZEE5
-    { id: 237,  name: "SonyLIV" },  // SonyLIV
-    { id: 2336, name: "JioHotstar" }, // JioHotstar
-    { id: 532,  name: "Aha"      },  // Aha
-  ];
-  const results = [];
-  for (const p of platforms) {
-    try {
-      const { movies, series } = await fetchByProvider(p.id);
-      // Pre-assign platform so we don't need a provider API call
-      const tagged = [...movies, ...series].map(item => ({
-        ...item,
-        platforms: [p.name],
-      }));
-      results.push(...tagged);
-    } catch {}
-  }
-  return results;
+  return get(`${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=popularity.desc&page=${page}&language=ta-IN`);
 }
 
 // Search: full TMDb search across ALL years — no OTT filter, broader results
@@ -215,14 +175,14 @@ function MovieCard({ item, genreMap, onClick, idx }) {
         WebkitTapHighlightColor:"transparent",
       }}
     >
-      {/* Poster — fixed height so all cards are same size regardless of image ratio */}
+      {/* Poster */}
       <div style={{
-        position:"relative", height:"280px", overflow:"hidden",
+        position:"relative", aspectRatio:"2/3", overflow:"hidden",
         background: poster ? "#000" : `linear-gradient(135deg,${pm.color}22,${C.base})`,
         flexShrink:0,
       }}>
         {poster
-          ? <img src={poster} alt={title} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center top",display:"block",transition:"transform 0.4s ease",transform:hov?"scale(1.04)":"scale(1)"}}/>
+          ? <img src={poster} alt={title} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform 0.4s ease",transform:hov?"scale(1.04)":"scale(1)"}}/>
           : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"42px",color:pm.color,opacity:0.3}}>🎬</div>
         }
 
@@ -573,7 +533,6 @@ export default function App() {
   const [filters,       setFilters]       = useState({ platform:"All", langType:"All", mediaType:"All", sortBy:"date" });
   const providerCache   = useRef({});
   const searchTimer     = useRef(null);
-  const [platformsReady, setPlatformsReady] = useState(false);
 
   // Load genres once
   useEffect(() => {
@@ -610,21 +569,17 @@ export default function App() {
       setLoading(true); setError(null);
       try {
         console.log("Fetching Tamil movies from TMDb...");
-        const [mvData, tvData, dubData, platformItems] = await Promise.all([
-          fetchMovies(1), fetchSeries(1), fetchDubbed(1), fetchPlatformSpecific(),
+        const [mvData, tvData, dubData] = await Promise.all([
+          fetchMovies(1), fetchSeries(1), fetchDubbed(1),
         ]);
 
-        console.log("Movies:", mvData.results?.length, "Series:", tvData.results?.length, "Dubbed:", dubData.results?.length, "Platform-specific:", platformItems.length);
+        console.log("Movies:", mvData.results?.length, "Series:", tvData.results?.length, "Dubbed:", dubData.results?.length);
 
         const movies  = (mvData.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Original Tamil", platforms:[] }));
         const series  = (tvData.results||[]).map(t => ({ ...t, mediaType:"tv",    langType:"Original Tamil", platforms:[] }));
         const dubbed  = (dubData.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Dubbed Tamil",   platforms:[] }));
 
-        // Merge platform-specific items — deduplicate by id
-        const baseIds = new Set([...movies, ...series, ...dubbed].map(i => `${i.mediaType||"movie"}-${i.id}`));
-        const uniquePlatformItems = platformItems.filter(i => !baseIds.has(`${i.mediaType}-${i.id}`));
-
-        const combined = [...movies, ...series, ...dubbed, ...uniquePlatformItems];
+        const combined = [...movies, ...series, ...dubbed];
 
         // ✅ Show movies immediately — don't wait for providers
         setAllItems(combined);
@@ -657,7 +612,6 @@ export default function App() {
           if (i + batchSize < combined.length) await new Promise(r => setTimeout(r, 150));
         }
         console.log("All platform data loaded!");
-        setPlatformsReady(true);
 
       } catch (e) {
         console.error("TMDb fetch error:", e);
@@ -695,13 +649,9 @@ export default function App() {
     const source = isSearchMode ? searchResults : allItems;
     let r = source.filter(item => {
       if (!isSearchMode) {
-        if (filters.platform !== "All") {
-          const itemPlatforms = item.platforms || [];
-          // Must have platforms loaded AND match the selected platform
-          if (!itemPlatforms.includes(filters.platform)) return false;
-        }
-        if (filters.langType  !== "All" && item.langType !== filters.langType)   return false;
-        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType) return false;
+        if (filters.platform  !== "All" && !(item.platforms||[]).includes(filters.platform)) return false;
+        if (filters.langType  !== "All" && item.langType !== filters.langType)               return false;
+        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType)             return false;
       }
       return true;
     });
@@ -1003,21 +953,11 @@ export default function App() {
           </div>
         ) : displayed.length === 0 && !searching ? (
           <div style={{textAlign:"center",padding:"80px 20px"}}>
-            {filters.platform !== "All" && !platformsReady ? (
-              <>
-                <div style={{width:"32px",height:"32px",border:`3px solid ${C.border}`,borderTopColor:C.gold,borderRadius:"50%",margin:"0 auto 16px",animation:"spin 0.8s linear infinite"}}/>
-                <p style={{color:C.muted,fontSize:"14px"}}>Loading {filters.platform} catalogue…</p>
-                <p style={{color:C.border,fontSize:"11px",marginTop:"8px"}}>Platform data loads in background — takes 10–15 seconds</p>
-              </>
-            ) : (
-              <>
-                <div style={{fontSize:"36px",marginBottom:"14px",opacity:0.3}}>◎</div>
-                <p style={{color:C.muted,fontSize:"15px",fontFamily:"'Fraunces',Georgia,serif"}}>
-                  {isSearchMode ? `No results found for "${search}"` : `No titles found on ${filters.platform !== "All" ? filters.platform : "selected filters"}`}
-                </p>
-                {!isSearchMode && <button onClick={()=>setFilters({platform:"All",langType:"All",mediaType:"All",sortBy:"date"})} style={{marginTop:"14px",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 18px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Clear all filters</button>}
-              </>
-            )}
+            <div style={{fontSize:"36px",marginBottom:"14px",opacity:0.3}}>◎</div>
+            <p style={{color:C.muted,fontSize:"15px",fontFamily:"'Fraunces',Georgia,serif"}}>
+              {isSearchMode ? `No results found for "${search}"` : "No titles match your filters"}
+            </p>
+            {!isSearchMode && <button onClick={()=>setFilters({platform:"All",langType:"All",mediaType:"All",sortBy:"date"})} style={{marginTop:"14px",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 18px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Clear all filters</button>}
           </div>
         ) : (
           <>
