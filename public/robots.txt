@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ott-padam.vercel.app/sitemap.xml
