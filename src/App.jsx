@@ -693,9 +693,15 @@ export default function App() {
     const source = isSearchMode ? searchResults : allItems;
     let r = source.filter(item => {
       if (!isSearchMode) {
-        if (filters.platform  !== "All" && !(item.platforms||[]).includes(filters.platform)) return false;
-        if (filters.langType  !== "All" && item.langType !== filters.langType)               return false;
-        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType)             return false;
+        // Platform filter — only show items where platform is confirmed
+        // If platform filter active and item has no platforms yet, hide it
+        if (filters.platform !== "All") {
+          const itemPlatforms = item.platforms || [];
+          if (itemPlatforms.length === 0) return false;
+          if (!itemPlatforms.includes(filters.platform)) return false;
+        }
+        if (filters.langType  !== "All" && item.langType !== filters.langType)   return false;
+        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType) return false;
       }
       return true;
     });
