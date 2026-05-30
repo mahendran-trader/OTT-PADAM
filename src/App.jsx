@@ -78,17 +78,57 @@ function useBreakpoint() {
 // ─── TMDB API HELPERS ─────────────────────────────────────────────────────────
 const get = (url) => fetch(url).then(r => r.json());
 
-// Discover: Tamil originals currently on OTT in India (all years, sorted by popularity)
+// Base discover URL builder
+const discoverMovie = (params) => `${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
+const discoverTV    = (params) => `${TMDB}/discover/tv?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
+
+// Tamil originals — all platforms
 async function fetchMovies(page = 1) {
-  return get(`${TMDB}/discover/movie?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
+  return get(discoverMovie(`with_original_language=ta&sort_by=popularity.desc&page=${page}`));
 }
-
 async function fetchSeries(page = 1) {
-  return get(`${TMDB}/discover/tv?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
+  return get(discoverTV(`with_original_language=ta&sort_by=popularity.desc&page=${page}`));
 }
 
+// Dubbed Tamil — Hindi/Telugu/Malayalam/Kannada/English movies available in India
 async function fetchDubbed(page = 1) {
-  return get(`${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=popularity.desc&page=${page}&language=ta-IN`);
+  return get(discoverMovie(`with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=popularity.desc&page=${page}&language=ta-IN`));
+}
+
+// Platform-specific fetches — directly filter by provider ID for better coverage
+async function fetchByProvider(providerId, page = 1) {
+  const [mv, tv] = await Promise.all([
+    get(discoverMovie(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=popularity.desc&page=${page}`)),
+    get(discoverTV(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=popularity.desc&page=${page}`)),
+  ]);
+  return {
+    movies: (mv.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Original Tamil", platforms:[] })),
+    series: (tv.results||[]).map(t => ({ ...t, mediaType:"tv",    langType:"Original Tamil", platforms:[] })),
+  };
+}
+
+// Fetch content specifically for underrepresented platforms
+async function fetchPlatformSpecific() {
+  const platforms = [
+    { id: 309,  name: "Sun NXT"  },  // Sun NXT
+    { id: 232,  name: "ZEE5"     },  // ZEE5
+    { id: 237,  name: "SonyLIV" },  // SonyLIV
+    { id: 2336, name: "JioHotstar" }, // JioHotstar
+    { id: 532,  name: "Aha"      },  // Aha
+  ];
+  const results = [];
+  for (const p of platforms) {
+    try {
+      const { movies, series } = await fetchByProvider(p.id);
+      // Pre-assign platform so we don't need a provider API call
+      const tagged = [...movies, ...series].map(item => ({
+        ...item,
+        platforms: [p.name],
+      }));
+      results.push(...tagged);
+    } catch {}
+  }
+  return results;
 }
 
 // Search: full TMDb search across ALL years — no OTT filter, broader results
@@ -569,17 +609,21 @@ export default function App() {
       setLoading(true); setError(null);
       try {
         console.log("Fetching Tamil movies from TMDb...");
-        const [mvData, tvData, dubData] = await Promise.all([
-          fetchMovies(1), fetchSeries(1), fetchDubbed(1),
+        const [mvData, tvData, dubData, platformItems] = await Promise.all([
+          fetchMovies(1), fetchSeries(1), fetchDubbed(1), fetchPlatformSpecific(),
         ]);
 
-        console.log("Movies:", mvData.results?.length, "Series:", tvData.results?.length, "Dubbed:", dubData.results?.length);
+        console.log("Movies:", mvData.results?.length, "Series:", tvData.results?.length, "Dubbed:", dubData.results?.length, "Platform-specific:", platformItems.length);
 
         const movies  = (mvData.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Original Tamil", platforms:[] }));
         const series  = (tvData.results||[]).map(t => ({ ...t, mediaType:"tv",    langType:"Original Tamil", platforms:[] }));
         const dubbed  = (dubData.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Dubbed Tamil",   platforms:[] }));
 
-        const combined = [...movies, ...series, ...dubbed];
+        // Merge platform-specific items — deduplicate by id
+        const baseIds = new Set([...movies, ...series, ...dubbed].map(i => `${i.mediaType||"movie"}-${i.id}`));
+        const uniquePlatformItems = platformItems.filter(i => !baseIds.has(`${i.mediaType}-${i.id}`));
+
+        const combined = [...movies, ...series, ...dubbed, ...uniquePlatformItems];
 
         // ✅ Show movies immediately — don't wait for providers
         setAllItems(combined);
