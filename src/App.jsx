@@ -78,17 +78,17 @@ function useBreakpoint() {
 // ─── TMDB API HELPERS ─────────────────────────────────────────────────────────
 const get = (url) => fetch(url).then(r => r.json());
 
-// Discover: Tamil originals currently on OTT in India (all years, sorted by popularity)
+// Discover: Tamil originals currently on OTT in India — newest first
 async function fetchMovies(page = 1) {
-  return get(`${TMDB}/discover/movie?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
+  return get(`${TMDB}/discover/movie?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=primary_release_date.desc&page=${page}&language=en-US`);
 }
 
 async function fetchSeries(page = 1) {
-  return get(`${TMDB}/discover/tv?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc&page=${page}&language=en-US`);
+  return get(`${TMDB}/discover/tv?${K}&with_original_language=ta&watch_region=IN&with_watch_monetization_types=flatrate&sort_by=first_air_date.desc&page=${page}&language=en-US`);
 }
 
 async function fetchDubbed(page = 1) {
-  return get(`${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=popularity.desc&page=${page}&language=ta-IN`);
+  return get(`${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=primary_release_date.desc&page=${page}&language=ta-IN`);
 }
 
 // Search: full TMDb search across ALL years — no OTT filter, broader results
@@ -175,14 +175,14 @@ function MovieCard({ item, genreMap, onClick, idx }) {
         WebkitTapHighlightColor:"transparent",
       }}
     >
-      {/* Poster */}
+      {/* Poster — fixed height keeps all cards uniform */}
       <div style={{
-        position:"relative", aspectRatio:"2/3", overflow:"hidden",
+        position:"relative", height:"270px", overflow:"hidden",
         background: poster ? "#000" : `linear-gradient(135deg,${pm.color}22,${C.base})`,
         flexShrink:0,
       }}>
         {poster
-          ? <img src={poster} alt={title} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",transition:"transform 0.4s ease",transform:hov?"scale(1.04)":"scale(1)"}}/>
+          ? <img src={poster} alt={title} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center top",display:"block",transition:"transform 0.4s ease",transform:hov?"scale(1.04)":"scale(1)"}}/>
           : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"42px",color:pm.color,opacity:0.3}}>🎬</div>
         }
 
@@ -531,8 +531,9 @@ export default function App() {
   const [search,        setSearch]        = useState("");
   const [searchFocus,   setSearchFocus]   = useState(false);
   const [filters,       setFilters]       = useState({ platform:"All", langType:"All", mediaType:"All", sortBy:"date" });
-  const providerCache   = useRef({});
-  const searchTimer     = useRef(null);
+  const providerCache     = useRef({});
+  const searchTimer       = useRef(null);
+  const [platformsReady,  setPlatformsReady] = useState(false);
 
   // Load genres once
   useEffect(() => {
@@ -612,6 +613,7 @@ export default function App() {
           if (i + batchSize < combined.length) await new Promise(r => setTimeout(r, 150));
         }
         console.log("All platform data loaded!");
+        setPlatformsReady(true);
 
       } catch (e) {
         console.error("TMDb fetch error:", e);
@@ -649,9 +651,11 @@ export default function App() {
     const source = isSearchMode ? searchResults : allItems;
     let r = source.filter(item => {
       if (!isSearchMode) {
-        if (filters.platform  !== "All" && !(item.platforms||[]).includes(filters.platform)) return false;
-        if (filters.langType  !== "All" && item.langType !== filters.langType)               return false;
-        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType)             return false;
+        if (filters.platform !== "All") {
+          if (!(item.platforms||[]).includes(filters.platform)) return false;
+        }
+        if (filters.langType  !== "All" && item.langType !== filters.langType)   return false;
+        if (filters.mediaType !== "All" && item.mediaType !== filters.mediaType) return false;
       }
       return true;
     });
@@ -953,11 +957,21 @@ export default function App() {
           </div>
         ) : displayed.length === 0 && !searching ? (
           <div style={{textAlign:"center",padding:"80px 20px"}}>
-            <div style={{fontSize:"36px",marginBottom:"14px",opacity:0.3}}>◎</div>
-            <p style={{color:C.muted,fontSize:"15px",fontFamily:"'Fraunces',Georgia,serif"}}>
-              {isSearchMode ? `No results found for "${search}"` : "No titles match your filters"}
-            </p>
-            {!isSearchMode && <button onClick={()=>setFilters({platform:"All",langType:"All",mediaType:"All",sortBy:"date"})} style={{marginTop:"14px",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 18px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Clear all filters</button>}
+            {filters.platform !== "All" && !platformsReady ? (
+              <>
+                <div style={{width:"32px",height:"32px",border:`3px solid ${C.border}`,borderTopColor:C.gold,borderRadius:"50%",margin:"0 auto 16px",animation:"spin 0.8s linear infinite"}}/>
+                <p style={{color:C.muted,fontSize:"14px"}}>Loading {filters.platform} catalogue…</p>
+                <p style={{color:C.border,fontSize:"11px",marginTop:"8px"}}>Takes 10–15 seconds on first load</p>
+              </>
+            ) : (
+              <>
+                <div style={{fontSize:"36px",marginBottom:"14px",opacity:0.3}}>◎</div>
+                <p style={{color:C.muted,fontSize:"15px",fontFamily:"'Fraunces',Georgia,serif"}}>
+                  {isSearchMode ? `No results found for "${search}"` : "No titles match your filters"}
+                </p>
+                {!isSearchMode && <button onClick={()=>setFilters({platform:"All",langType:"All",mediaType:"All",sortBy:"date"})} style={{marginTop:"14px",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 18px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Clear all filters</button>}
+              </>
+            )}
           </div>
         ) : (
           <>
