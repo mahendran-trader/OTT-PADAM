@@ -82,28 +82,24 @@ const get = (url) => fetch(url).then(r => r.json());
 const discoverMovie = (params) => `${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
 const discoverTV    = (params) => `${TMDB}/discover/tv?${K}&watch_region=IN&with_watch_monetization_types=flatrate&language=en-US&${params}`;
 
-// Date range — only last 2 months on homepage, search covers all years
-const TODAY      = new Date().toISOString().split("T")[0];
-const TWO_MONTHS = new Date(Date.now() - 60*24*60*60*1000).toISOString().split("T")[0];
-
-// Tamil originals — newest first, last 2 months only
+// Tamil originals — newest first, no date restriction (TMDb returns currently streaming)
 async function fetchMovies(page = 1) {
-  return get(discoverMovie(`with_original_language=ta&sort_by=primary_release_date.desc&primary_release_date.gte=${TWO_MONTHS}&primary_release_date.lte=${TODAY}&page=${page}`));
+  return get(discoverMovie(`with_original_language=ta&sort_by=primary_release_date.desc&page=${page}`));
 }
 async function fetchSeries(page = 1) {
-  return get(discoverTV(`with_original_language=ta&sort_by=first_air_date.desc&first_air_date.gte=${TWO_MONTHS}&first_air_date.lte=${TODAY}&page=${page}`));
+  return get(discoverTV(`with_original_language=ta&sort_by=first_air_date.desc&page=${page}`));
 }
 
-// Dubbed Tamil — last 2 months only
+// Dubbed Tamil — newest first
 async function fetchDubbed(page = 1) {
-  return get(discoverMovie(`with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=primary_release_date.desc&primary_release_date.gte=${TWO_MONTHS}&primary_release_date.lte=${TODAY}&page=${page}&language=ta-IN`));
+  return get(discoverMovie(`with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=primary_release_date.desc&page=${page}&language=ta-IN`));
 }
 
-// Platform-specific — last 2 months only
+// Platform-specific — no date restriction, sort by date
 async function fetchByProvider(providerId, page = 1) {
   const [mv, tv] = await Promise.all([
-    get(discoverMovie(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=primary_release_date.desc&primary_release_date.gte=${TWO_MONTHS}&primary_release_date.lte=${TODAY}&page=${page}`)),
-    get(discoverTV(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=first_air_date.desc&first_air_date.gte=${TWO_MONTHS}&first_air_date.lte=${TODAY}&page=${page}`)),
+    get(discoverMovie(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=primary_release_date.desc&page=${page}`)),
+    get(discoverTV(`with_original_language=ta&with_watch_providers=${providerId}&sort_by=first_air_date.desc&page=${page}`)),
   ]);
   return {
     movies: (mv.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Original Tamil", platforms:[] })),
