@@ -16,11 +16,7 @@ const PROVIDER_MAP = {
   237:  "SonyLIV",
   309:  "Sun NXT",
   532:  "Aha",
-  350:  "Apple TV+",
-  561:  "Lionsgate Play",
-  315:  "Hoichoi",
   515:  "MX Player",
-  510:  "Discovery+",
 };
 
 // ─── PALETTE ─────────────────────────────────────────────────────────────────
@@ -49,11 +45,7 @@ const PLATFORM_META = {
   "Sun NXT":        { color:"#F57C00", dot:"#FFA040", bg:"#150800" },
   "SonyLIV":        { color:"#1A56C4", dot:"#5588EE", bg:"#00051A" },
   "Aha":            { color:"#C8A000", dot:"#ECC840", bg:"#110E00" },
-  "Apple TV+":      { color:"#555555", dot:"#AAAAAA", bg:"#111111" },
-  "Lionsgate Play": { color:"#FF0000", dot:"#FF6666", bg:"#1A0000" },
-  "Hoichoi":        { color:"#E63946", dot:"#FF7070", bg:"#1A0005" },
   "MX Player":      { color:"#00B4D8", dot:"#48CAE4", bg:"#001A1F" },
-  "Discovery+":     { color:"#0052D4", dot:"#4A90E2", bg:"#000D2A" },
 };
 
 const GENRE_COLORS = {
