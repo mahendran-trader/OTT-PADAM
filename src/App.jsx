@@ -91,6 +91,36 @@ async function fetchDubbed(page = 1) {
   return get(`${TMDB}/discover/movie?${K}&watch_region=IN&with_watch_monetization_types=flatrate&with_original_language=hi%7Cte%7Cml%7Ckn%7Cen&sort_by=popularity.desc&page=${page}&language=ta-IN`);
 }
 
+// Newest Tamil titles per smaller OTT (these never reach the top 20 otherwise)
+const TODAY = new Date().toISOString().split("T")[0];
+const SMALL_OTTS = { "ZEE5":232, "Sun NXT":309, "SonyLIV":237, "JioHotstar":2336, "Aha":532 };
+
+async function fetchLatestByPlatform() {
+  const byKey = {};
+  await Promise.all(Object.entries(SMALL_OTTS).map(async ([name, id]) => {
+    try {
+      const base = `watch_region=IN&with_watch_providers=${id}&with_original_language=ta&language=en-US&page=1`;
+      const [mv, tv] = await Promise.all([
+        get(`${TMDB}/discover/movie?${K}&${base}&sort_by=primary_release_date.desc&primary_release_date.lte=${TODAY}`),
+        get(`${TMDB}/discover/tv?${K}&${base}&sort_by=first_air_date.desc&first_air_date.lte=${TODAY}`),
+      ]);
+      const tag = (list, mediaType) => (list.results || [])
+        .filter(r => r.poster_path)
+        .forEach(r => {
+          const key = `${mediaType}-${r.id}`;
+          if (byKey[key]) {
+            if (!byKey[key].platforms.includes(name)) byKey[key].platforms.push(name);
+          } else {
+            byKey[key] = { ...r, mediaType, langType: "Original Tamil", platforms: [name] };
+          }
+        });
+      tag(mv, "movie");
+      tag(tv, "tv");
+    } catch (e) { console.error("Platform fetch failed:", name, e); }
+  }));
+  return Object.values(byKey);
+}
+
 // Search: full TMDb search across ALL years — no OTT filter, broader results
 async function searchTMDb(query, page = 1) {
   return get(`${TMDB}/search/multi?${K}&query=${encodeURIComponent(query)}&language=en-US&page=${page}&include_adult=false`);
@@ -569,8 +599,8 @@ export default function App() {
       setLoading(true); setError(null);
       try {
         console.log("Fetching Tamil movies from TMDb...");
-        const [mvData, tvData, dubData] = await Promise.all([
-          fetchMovies(1), fetchSeries(1), fetchDubbed(1),
+        const [mvData, tvData, dubData, latestItems] = await Promise.all([
+          fetchMovies(1), fetchSeries(1), fetchDubbed(1), fetchLatestByPlatform(),
         ]);
 
         console.log("Movies:", mvData.results?.length, "Series:", tvData.results?.length, "Dubbed:", dubData.results?.length);
@@ -579,7 +609,10 @@ export default function App() {
         const series  = (tvData.results||[]).map(t => ({ ...t, mediaType:"tv",    langType:"Original Tamil", platforms:[] }));
         const dubbed  = (dubData.results||[]).map(m => ({ ...m, mediaType:"movie", langType:"Dubbed Tamil",   platforms:[] }));
 
-        const combined = [...movies, ...series, ...dubbed];
+        const seen  = new Set([...movies, ...series, ...dubbed].map(i => `${i.mediaType}-${i.id}`));
+        const extra = latestItems.filter(i => !seen.has(`${i.mediaType}-${i.id}`));
+        extra.forEach(i => { providerCache.current[`${i.mediaType}-${i.id}`] = i.platforms; });
+        const combined = [...movies, ...series, ...dubbed, ...extra];
 
         // ✅ Show movies immediately — don't wait for providers
         setAllItems(combined);
