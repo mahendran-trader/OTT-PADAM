@@ -16,7 +16,6 @@ const PROVIDER_MAP = {
   237:  "SonyLIV",
   309:  "Sun NXT",
   532:  "Aha",
-  515:  "MX Player",
 };
 
 // ─── PALETTE ─────────────────────────────────────────────────────────────────
@@ -45,7 +44,6 @@ const PLATFORM_META = {
   "Sun NXT":        { color:"#F57C00", dot:"#FFA040", bg:"#150800" },
   "SonyLIV":        { color:"#1A56C4", dot:"#5588EE", bg:"#00051A" },
   "Aha":            { color:"#C8A000", dot:"#ECC840", bg:"#110E00" },
-  "MX Player":      { color:"#00B4D8", dot:"#48CAE4", bg:"#001A1F" },
 };
 
 const GENRE_COLORS = {
